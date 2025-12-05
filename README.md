@@ -24,6 +24,7 @@ Chào mừng bạn đến với mô hình Vũ trụ 3D tương tác thông minh!
 ---
 
 ## 💡 Mẹo nhỏ để trải nghiệm mượt mà
+* ✅ **Đồ họa:** Nếu bạn dùng laptop hoặc máy tính có 2 card đồ họa thì hãy ưu tiên sử dụng card đồ họa rời thay thì card đồ họa tích hợp để chạy mượt và tránh bị giật nha.
 * ✅ **Ánh sáng:** Đảm bảo nơi bạn ngồi có đủ ánh sáng để Webcam nhìn rõ bàn tay.
 * ✅ **Khoảng cách:** Giữ tay cách Camera khoảng 30-50cm là lý tưởng nhất.
 * ✅ **Chuyển đổi:** Khi đổi cử chỉ (ví dụ từ Nắm đấm sang Mở tay), hãy làm dứt khoát để hệ thống nhận diện nhanh hơn.
