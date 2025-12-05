@@ -76,14 +76,14 @@
         const debugText = document.getElementById('debug-text');
         
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x000000, 0.02); // Pure black fog for high contrast
+        scene.fog = new THREE.FogExp2(0x000000, 0.02);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 8;
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio); // Important for sharpness
+        renderer.setPixelRatio(window.devicePixelRatio); 
         container.appendChild(renderer.domElement);
 
         const universeGroup = new THREE.Group();
@@ -94,17 +94,16 @@
         centralSystem.rotation.x = Math.PI / 8;
         universeGroup.add(centralSystem);
 
-        // --- TEXTURE GENERATION (SHARPER) ---
+        // --- TEXTURE GENERATION ---
         const getSharpTexture = (colorHex) => {
             const canvas = document.createElement('canvas');
-            canvas.width = 64; // Higher res
+            canvas.width = 64; 
             canvas.height = 64;
             const ctx = canvas.getContext('2d');
             
-            // Core glow
             const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-            gradient.addColorStop(0, 'rgba(255,255,255,1)');   // White hot center
-            gradient.addColorStop(0.15, 'rgba(255,255,255,1)'); // Solid core
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(0.15, 'rgba(255,255,255,1)');
             gradient.addColorStop(0.3, 'rgba(255,255,255,0.4)');
             gradient.addColorStop(1, 'rgba(0,0,0,0)');
             
@@ -116,19 +115,16 @@
         const sharpTexture = getSharpTexture();
         sharpTexture.needsUpdate = true;
 
-        // --- 1. THE PLANET SURFACE (Particles instead of Solid Mesh) ---
-        // Using a high density of particles to simulate a surface
-        const surfaceParticleCount = 8000; // Denser
+        // --- 1. THE PLANET SURFACE ---
+        const surfaceParticleCount = 8000;
         const surfGeo = new THREE.BufferGeometry();
         const surfPos = new Float32Array(surfaceParticleCount * 3);
         const surfCols = new Float32Array(surfaceParticleCount * 3);
 
-        const surfColor1 = new THREE.Color(0xffcc00); // Gold
-        const surfColor2 = new THREE.Color(0xff5500); // Dark Orange/Red
+        const surfColor1 = new THREE.Color(0xffcc00); 
+        const surfColor2 = new THREE.Color(0xff5500); 
 
         for (let i = 0; i < surfaceParticleCount; i++) {
-            // Layered sphere distribution
-            // Core radius is approx 2.0. We distribute between 1.8 and 2.2 to give "crust" depth
             const r = 1.9 + Math.random() * 0.4; 
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.acos((Math.random() * 2) - 1);
@@ -141,7 +137,6 @@
             surfPos[i * 3 + 1] = y;
             surfPos[i * 3 + 2] = z;
 
-            // Color variation
             const mix = Math.random();
             const col = surfColor1.clone().lerp(surfColor2, mix);
             surfCols[i * 3] = col.r; surfCols[i * 3 + 1] = col.g; surfCols[i * 3 + 2] = col.b;
@@ -151,11 +146,11 @@
         surfGeo.setAttribute('color', new THREE.BufferAttribute(surfCols, 3));
         
         const surfMat = new THREE.PointsMaterial({ 
-            size: 0.08, // Small, sharp points
+            size: 0.08, 
             vertexColors: true, 
             map: sharpTexture, 
             blending: THREE.AdditiveBlending, 
-            depthWrite: false, // Allows seeing through to the core
+            depthWrite: false, 
             transparent: true,
             opacity: 0.8 
         });
@@ -163,11 +158,7 @@
         centralSystem.add(planetSurface);
 
 
-        // --- 2. PULSING BLUE CORE (The "Heart") ---
-        // We use a Sprite for the glowy core look
-        const coreTexture = new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/sprites/glow.png'); // Fallback or generate
-        
-        // Let's generate a blue glow texture locally to be safe
+        // --- 2. PULSING BLUE CORE ---
         const getBlueGlow = () => {
              const c = document.createElement('canvas'); c.width=64; c.height=64;
              const x = c.getContext('2d');
@@ -187,13 +178,11 @@
             opacity: 1.0
         });
         const blueCore = new THREE.Sprite(coreMaterial);
-        blueCore.scale.set(3, 3, 3); // Initial size
+        blueCore.scale.set(3, 3, 3);
         centralSystem.add(blueCore);
 
 
-        // --- 3. RINGS (Multi-Layered & Random Colors) ---
-        
-        // Helper function to create a ring
+        // --- 3. RINGS ---
         const createRing = (innerR, outerR, count, colorHex1, colorHex2, size = 0.05) => {
             const geo = new THREE.BufferGeometry();
             const pos = new Float32Array(count * 3);
@@ -206,10 +195,9 @@
                 const theta = Math.random() * Math.PI * 2;
                 
                 pos[i*3] = r * Math.cos(theta);
-                pos[i*3+1] = (Math.random() - 0.5) * 0.1; // Very thin
+                pos[i*3+1] = (Math.random() - 0.5) * 0.1; 
                 pos[i*3+2] = r * Math.sin(theta);
                 
-                // Gradient
                 const t = (r - innerR) / (outerR - innerR);
                 const c = c1.clone().lerp(c2, t);
                 col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
@@ -223,55 +211,41 @@
             }));
         };
 
-        // Ring 1: Main Golden Ring (Super clear, 12000 particles)
         const mainRing = createRing(3.2, 6.0, 12000, 0xffaa00, 0xffeecc, 0.06);
         centralSystem.add(mainRing);
 
-        // Ring 2: Random Random Color 1 (Outer Thin)
-        // Generate random vibrant color
         const randomColor1 = new THREE.Color().setHSL(Math.random(), 1.0, 0.6);
-        const randomColor1End = randomColor1.clone().offsetHSL(0, 0, -0.2); // Slightly darker version
-        
+        const randomColor1End = randomColor1.clone().offsetHSL(0, 0, -0.2); 
         const ring2 = createRing(6.2, 7.0, 6000, randomColor1.getHex(), randomColor1End.getHex(), 0.05);
         centralSystem.add(ring2);
 
-        // Ring 3: Random Random Color 2 (Furthest Thin)
         const randomColor2 = new THREE.Color().setHSL(Math.random(), 1.0, 0.6);
         const randomColor2End = randomColor2.clone().offsetHSL(0, 0, -0.2);
-
         const ring3 = createRing(7.2, 7.8, 6000, randomColor2.getHex(), randomColor2End.getHex(), 0.05);
         centralSystem.add(ring3);
 
 
-        // --- 4. REALISTIC STARS (Varied Size & Brightness) ---
+        // --- 4. REALISTIC STARS ---
         const starsGeo = new THREE.BufferGeometry();
-        const starCount = 4000; // More stars
+        const starCount = 4000;
         const starPos = new Float32Array(starCount * 3);
-        const starSizes = new Float32Array(starCount); // Custom size per star
         const starColors = new Float32Array(starCount * 3);
 
         for(let i=0; i<starCount; i++) {
-            // Gaussian-like distribution (more in center, less far away)
-            // Use random direction * random radius^power
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.acos((Math.random() * 2) - 1);
-            const r = 10 + Math.pow(Math.random(), 2) * 100; // Expands far out
+            const r = 10 + Math.pow(Math.random(), 2) * 100; 
 
             starPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
             starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
             starPos[i*3+2] = r * Math.cos(phi);
 
-            // Varied Size
-            starSizes[i] = Math.random() * 0.5 + 0.1; // 0.1 to 0.6
-
-            // Realistic Colors (White, slightly Blue, slightly Red)
             const colorType = Math.random();
             let c = new THREE.Color();
-            if(colorType > 0.9) c.setHex(0xffdddd); // Reddish dwarf
-            else if(colorType > 0.7) c.setHex(0xddeeff); // Blue giant
-            else c.setHex(0xffffff); // White
+            if(colorType > 0.9) c.setHex(0xffdddd); 
+            else if(colorType > 0.7) c.setHex(0xddeeff); 
+            else c.setHex(0xffffff); 
             
-            // Dim distant stars
             const distFactor = 1 - Math.min(r / 100, 0.8);
             c.multiplyScalar(distFactor);
 
@@ -280,13 +254,9 @@
 
         starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
         starsGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-        // Note: 'size' attribute only works in ShaderMaterial usually, but PointsMaterial 
-        // doesn't support per-vertex size easily without custom shader.
-        // TRICK: We will create 2 layers of stars: Small and Big to simulate size variance easily
         
-        // Let's stick to standard material but create a "Starfield" feel
         const starMat = new THREE.PointsMaterial({
-            size: 0.15, // Base size
+            size: 0.15, 
             vertexColors: true,
             map: sharpTexture,
             transparent: true,
@@ -296,7 +266,6 @@
         const starField = new THREE.Points(starsGeo, starMat);
         universeGroup.add(starField);
         
-        // Add a second layer of "Tiny Background Stars"
         const tinyStarsGeo = new THREE.BufferGeometry();
         const tinyPos = new Float32Array(2000 * 3);
         for(let i=0; i<2000*3; i++) tinyPos[i] = (Math.random()-0.5)*300;
@@ -307,20 +276,20 @@
         universeGroup.add(tinyStars);
 
 
-        // --- 5. NEBULA (Subtle) ---
+        // --- 5. NEBULA ---
         const nebulaGeo = new THREE.BufferGeometry();
         const nebCount = 600;
         const nebPos = new Float32Array(nebCount * 3);
         const nebCol = new Float32Array(nebCount * 3);
-        const nc1 = new THREE.Color(0x4400aa); // Deep Purple
-        const nc2 = new THREE.Color(0x0044aa); // Deep Blue
+        const nc1 = new THREE.Color(0x4400aa); 
+        const nc2 = new THREE.Color(0x0044aa); 
 
         for(let i=0; i<nebCount; i++) {
             const r = 20 + Math.random() * 40;
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.random() * Math.PI;
             nebPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
-            nebPos[i*3+1] = (r * Math.sin(phi) * Math.sin(theta)) * 0.5; // Flattened
+            nebPos[i*3+1] = (r * Math.sin(phi) * Math.sin(theta)) * 0.5; 
             nebPos[i*3+2] = r * Math.cos(phi);
             
             const c = Math.random() > 0.5 ? nc1 : nc2;
@@ -335,66 +304,86 @@
         universeGroup.add(nebula);
 
 
-        // --- GESTURE & LOGIC ---
-        // Using Quaternions for robust World-Space rotation
+        // --- GESTURE & LOGIC (SMOOTHED) ---
+        // Improvement: Added smoothing variables to filter out hand jitter
         let state = {
             isHandDetected: false, 
             isFist: false, 
-            targetQuaternion: new THREE.Quaternion(), // Stores Accumulated Rotation
+            targetQuaternion: new THREE.Quaternion(), 
             targetZoom: 8, 
-            handX: 0, 
-            handY: 0, 
-            prevHandX: 0, 
-            prevHandY: 0,
-            prevHandAngle: 0
+            
+            // Smoothing Data
+            smoothX: 0, 
+            smoothY: 0, 
+            smoothAngle: 0,
+            
+            prevSmoothX: 0,
+            prevSmoothY: 0,
+            prevSmoothAngle: 0
         };
 
         const videoElement = document.getElementById('webcam-feed');
         const statusText = document.getElementById('status-text');
         const statusDot = document.getElementById('status-dot');
 
+        // Linear Interpolation Helper for smoothing
+        const lerp = (start, end, factor) => start + (end - start) * factor;
+
         function onResults(results) {
             if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                state.isHandDetected = false; debugText.innerText = "Scanning Space..."; return;
+                state.isHandDetected = false; 
+                debugText.innerText = "Scanning Space..."; 
+                return;
             }
             state.isHandDetected = true;
             const lm = results.multiHandLandmarks[0];
-            state.handX = 1 - lm[9].x; state.handY = lm[9].y;
 
-            // Helper: Check folded fingers
-            const isFolded = (tip, pip) => Math.hypot(lm[tip].x-lm[0].x, lm[tip].y-lm[0].y) < Math.hypot(lm[pip].x-lm[0].x, lm[pip].y-lm[0].y);
+            // 1. Get RAW Data
+            const rawX = 1 - lm[9].x; 
+            const rawY = lm[9].y;
             
+            // 2. APPLY SMOOTHING (High Response)
+            // INCREASED: 0.15 -> 0.3 for faster response (less lag)
+            const smoothFactor = 0.3; 
+            state.smoothX = lerp(state.smoothX, rawX, smoothFactor);
+            state.smoothY = lerp(state.smoothY, rawY, smoothFactor);
+
+            // --- Finger Logic ---
+            const isFolded = (tip, pip) => Math.hypot(lm[tip].x-lm[0].x, lm[tip].y-lm[0].y) < Math.hypot(lm[pip].x-lm[0].x, lm[pip].y-lm[0].y);
             const indexF = isFolded(8,6);
             const middleF = isFolded(12,10);
             const ringF = isFolded(16,14);
             const pinkyF = isFolded(20,18);
-
             const isFist = indexF && middleF && ringF && pinkyF;
             const isTwoFingers = !indexF && middleF && ringF && pinkyF;
 
-            // Hand Roll Angle
+            // --- Angle Logic (Smoothed) ---
             const dx = lm[9].x - lm[0].x;
             const dy = lm[9].y - lm[0].y; 
-            const currentAngle = Math.atan2(dy, dx); 
+            const rawAngle = Math.atan2(dy, dx); 
+            // Fix angle wrap-around for lerp
+            let diffAngle = rawAngle - state.smoothAngle;
+            if (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+            if (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+            state.smoothAngle += diffAngle * smoothFactor;
 
             if (isFist) {
                 // --- FIST: WORLD XY ROTATION ---
-                debugText.innerText = "✊ ROTATING XY";
-                const dX = state.handX - state.prevHandX;
-                const dY = state.handY - state.prevHandY;
+                debugText.innerText = "✊ ROTATING XY (Fast)";
                 
-                // Sensitivity multiplier
-                const SENSITIVITY = 6;
-
-                // Create World-Space rotations
-                // Drag Right (dX > 0) -> Rotate around World Y axis (0,1,0)
-                const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dX * SENSITIVITY);
-                // Drag Up (dY > 0) -> Rotate around World X axis (1,0,0)
-                const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dY * SENSITIVITY);
+                // Calculate Delta based on SMOOTHED positions, not raw
+                const dX = state.smoothX - state.prevSmoothX;
+                const dY = state.smoothY - state.prevSmoothY;
                 
-                // Apply to Target Quaternion (Premultiply = World Space)
-                state.targetQuaternion.premultiply(qY);
-                state.targetQuaternion.premultiply(qX);
+                // Deadzone
+                if (Math.abs(dX) > 0.0005 || Math.abs(dY) > 0.0005) {
+                    // INCREASED: 5 -> 8 for higher sensitivity
+                    const SENSITIVITY = 8; 
+                    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dX * SENSITIVITY);
+                    const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dY * SENSITIVITY);
+                    state.targetQuaternion.premultiply(qY);
+                    state.targetQuaternion.premultiply(qX);
+                }
             
             } else if (isTwoFingers) {
                 // --- ZOOM MODE ---
@@ -402,27 +391,30 @@
                 debugText.innerText = `✌️ ZOOMING: ${pinchDist.toFixed(2)}`;
                 const minD = 0.02, maxD = 0.20; 
                 const t = (Math.max(minD, Math.min(maxD, pinchDist)) - minD) / (maxD - minD);
+                // Target zoom is updated, animation loop handles the smoothing
                 state.targetZoom = 14 - (t * 10); 
             
             } else {
                 // --- OPEN HAND: WORLD Z ROTATION (ROLL) ---
                 debugText.innerText = "🖐 TWIST: Rolling Z-Axis";
                 
-                let dAngle = currentAngle - state.prevHandAngle;
+                // Use smoothed angle delta
+                let dAngle = state.smoothAngle - state.prevSmoothAngle;
+                // Normalize again just in case
                 if (dAngle > Math.PI) dAngle -= Math.PI * 2;
                 if (dAngle < -Math.PI) dAngle += Math.PI * 2;
 
-                if (Math.abs(dAngle) > 0.02) {
-                    // Twist Right -> Rotate around World Z axis (0,0,1)
-                    const qZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), dAngle * 2.5);
+                if (Math.abs(dAngle) > 0.002) { 
+                    // INCREASED: 2.0 -> 3.5 for faster roll
+                    const qZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), dAngle * 3.5);
                     state.targetQuaternion.premultiply(qZ);
                 }
             }
 
-            // Store current values
-            state.prevHandX = state.handX; 
-            state.prevHandY = state.handY;
-            state.prevHandAngle = currentAngle;
+            // Store current smoothed values as "previous" for next frame
+            state.prevSmoothX = state.smoothX; 
+            state.prevSmoothY = state.smoothY;
+            state.prevSmoothAngle = state.smoothAngle;
         }
 
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
@@ -444,17 +436,19 @@
             requestAnimationFrame(animate);
             time += 0.015;
 
-            // 1. Camera Zoom
+            // 1. Camera Zoom (Smooth Damp)
+            // Using 0.05 factor gives a nice heavy camera feel
             camera.position.z += (state.targetZoom - camera.position.z) * 0.05;
 
-            // 2. Universe Rotation (Quaternion Slerp for Smoothness)
+            // 2. Universe Rotation
             if (state.isHandDetected) {
-                universeGroup.quaternion.slerp(state.targetQuaternion, 0.1);
+                // INCREASED: 0.08 -> 0.12 for snappier follow-through
+                universeGroup.quaternion.slerp(state.targetQuaternion, 0.12);
             } else {
-                // Idle Drift (Applied in World Space)
+                // Idle Drift
                 const driftQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.0008);
                 state.targetQuaternion.premultiply(driftQ);
-                universeGroup.quaternion.slerp(state.targetQuaternion, 0.1);
+                universeGroup.quaternion.slerp(state.targetQuaternion, 0.05);
             }
 
             // 3. Blue Core Pulsing
