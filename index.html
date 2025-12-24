@@ -50,8 +50,8 @@
             </div>
 
             <div class="mt-4">
-                <p class="text-xs text-cyan-600 font-mono">HỆ THỐNG:</p>
-                <p id="debug-text" class="text-xs text-gray-500 font-mono">Đang quét không gian...</p>
+                <p class="text-xs text-cyan-600 font-mono">DEBUG:</p>
+                <p id="debug-text" class="text-xs text-gray-500 font-mono">Đang quét tay...</p>
             </div>
         </div>
     </div>
@@ -98,7 +98,7 @@
         const surfaceParticleCount = 8000;
         const surfGeo = new THREE.BufferGeometry();
         const surfPos = new Float32Array(surfaceParticleCount * 3);
-        const originalPositions = new Float32Array(surfaceParticleCount * 3); // Lưu vị trí gốc
+        const originalPositions = new Float32Array(surfaceParticleCount * 3);
         const surfCols = new Float32Array(surfaceParticleCount * 3);
 
         for (let i = 0; i < surfaceParticleCount; i++) {
@@ -113,7 +113,7 @@
             surfPos[i * 3] = x; surfPos[i * 3 + 1] = y; surfPos[i * 3 + 2] = z;
             originalPositions[i * 3] = x; originalPositions[i * 3 + 1] = y; originalPositions[i * 3 + 2] = z;
 
-            const col = new THREE.Color().setHSL(0.1 + Math.random() * 0.1, 1.0, 0.5); // Tông vàng cam
+            const col = new THREE.Color().setHSL(0.1 + Math.random() * 0.1, 1.0, 0.5);
             surfCols[i * 3] = col.r; surfCols[i * 3 + 1] = col.g; surfCols[i * 3 + 2] = col.b;
         }
 
@@ -125,17 +125,8 @@
         }));
         centralSystem.add(planetSurface);
 
-        // --- 2. LÕI NĂNG LƯỢNG ---
-        const getBlueGlow = () => {
-             const c = document.createElement('canvas'); c.width=64; c.height=64;
-             const x = c.getContext('2d');
-             const g = x.createRadialGradient(32,32,0,32,32,32);
-             g.addColorStop(0, 'rgba(200, 255, 255, 1)');
-             g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-             x.fillStyle = g; x.fillRect(0,0,64,64);
-             const t = new THREE.Texture(c); t.needsUpdate=true; return t;
-        };
-        const blueCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: getBlueGlow(), color: 0x00ffff, blending: THREE.AdditiveBlending }));
+        // --- 2. LÕI ---
+        const blueCore = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x00ffff, blending: THREE.AdditiveBlending }));
         blueCore.scale.set(3, 3, 3);
         centralSystem.add(blueCore);
 
@@ -159,18 +150,16 @@
         let state = {
             targetQuaternion: new THREE.Quaternion(),
             targetZoom: 8,
-            explodeFactor: 0,       // 0 = Bình thường, 1 = Nổ tung
+            explodeFactor: 0,
             targetExplode: 0,
             prevHandX: 0, prevHandY: 0
         };
 
         function onResults(results) {
             if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                debugText.innerText = "Đang quét tay...";
-                state.targetExplode = 0; // Tự động thu hồi khi mất tay
+                state.targetExplode = 0; 
                 return;
             }
-
             const lm = results.multiHandLandmarks[0];
             const hX = 1 - lm[9].x; const hY = lm[9].y;
 
@@ -180,32 +169,19 @@
             const ringF = isFolded(16,14);
             const pinkyF = isFolded(20,18);
 
-            // 1. CHỈ NGÓN TRỎ: NỔ (EXPLODE)
             if (!indexF && middleF && ringF && pinkyF) {
-                debugText.innerText = "☝️ EXPLODING!";
-                state.targetExplode = 1;
-            } 
-            // 2. NẮM TAY: XOAY (ROTATE)
-            else if (indexF && middleF && ringF && pinkyF) {
-                debugText.innerText = "✊ ROTATING & RECALLING";
-                state.targetExplode = 0;
+                state.targetExplode = 1; // Nổ
+                debugText.innerText = "☝️ EXPLODING";
+            } else if (indexF && middleF && ringF && pinkyF) {
+                state.targetExplode = 0; // Nắm tay xoay
                 const dX = hX - state.prevHandX;
                 const dY = hY - state.prevHandY;
                 const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dX * 5);
                 const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dY * 5);
                 state.targetQuaternion.premultiply(qY).premultiply(qX);
-            }
-            // 3. HAI NGÓN: ZOOM
-            else if (!indexF && !middleF && ringF && pinkyF) {
-                debugText.innerText = "✌️ ZOOMING";
-                state.targetExplode = 0;
-                const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-                state.targetZoom = 15 - (dist * 25);
             } else {
                 state.targetExplode = 0;
-                debugText.innerText = "🖐 READY (Sẵn sàng)";
             }
-
             state.prevHandX = hX; state.prevHandY = hY;
         }
 
@@ -227,8 +203,37 @@
             requestAnimationFrame(animate);
             time += 0.02;
 
-            // 1. Cập nhật Explode (Nội suy mượt)
+            // 1. Cập nhật Explode Factor
             state.explodeFactor += (state.targetExplode - state.explodeFactor) * 0.08;
             
+            // 2. Di chuyển các hạt bề mặt
             const posAttr = planetSurface.geometry.attributes.position;
-            for (let i = 0; i < surface
+            for (let i = 0; i < surfaceParticleCount; i++) {
+                const i3 = i * 3;
+                const ox = originalPositions[i3];
+                const oy = originalPositions[i3+1];
+                const oz = originalPositions[i3+2];
+
+                // Vị trí đích khi nổ (bay xa gấp 4 lần kèm chút nhiễu sóng)
+                const tx = ox * 4 + Math.sin(time + i) * 0.3;
+                const ty = oy * 4 + Math.cos(time + i) * 0.3;
+                const tz = oz * 4;
+
+                // Nội suy từ gốc đến đích
+                posAttr.array[i3] = ox + (tx - ox) * state.explodeFactor;
+                posAttr.array[i3+1] = oy + (ty - oy) * state.explodeFactor;
+                posAttr.array[i3+2] = oz + (tz - oz) * state.explodeFactor;
+            }
+            posAttr.needsUpdate = true;
+
+            // 3. Xoay và Hiệu ứng lõi
+            universeGroup.quaternion.slerp(state.targetQuaternion, 0.1);
+            blueCore.scale.set(2 + Math.sin(time*3)*0.5, 2 + Math.sin(time*3)*0.5, 1);
+            
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
