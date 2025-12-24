@@ -3,237 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Realistic Golden Universe - Explode Effect</title>
+    <title>Universe Debug Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000000; color: white; font-family: 'Segoe UI', sans-serif; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-        #webcam-feed { position: absolute; bottom: 20px; left: 20px; width: 160px; height: 120px; border-radius: 10px; border: 2px solid #00ffff; z-index: 2; transform: scaleX(-1); object-fit: cover; opacity: 0.4; }
-        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 3; pointer-events: none; }
-        .instruction-card { background: rgba(0, 10, 20, 0.85); backdrop-filter: blur(8px); padding: 15px; border-radius: 12px; border: 1px solid rgba(0, 255, 255, 0.2); max-width: 300px; pointer-events: auto; }
-        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .status-active { background-color: #00ffff; box-shadow: 0 0 10px #00ffff; }
-        .status-loading { background-color: #ffa500; }
-        .gesture-icon { font-size: 1.2rem; width: 30px; display: inline-block; text-align: center; }
+        body { margin: 0; overflow: hidden; background: #000; color: white; font-family: sans-serif; }
+        #webcam-feed { position: absolute; bottom: 20px; left: 20px; width: 200px; height: 150px; 
+                       border: 2px solid #00ffff; border-radius: 8px; z-index: 10; transform: scaleX(-1); background: #111; }
+        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 20; }
+        .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
+        .loading { background: #ffa500; box-shadow: 0 0 10px #ffa500; }
+        .active { background: #00ff00; box-shadow: 0 0 10px #00ff00; }
+        .error { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
     </style>
 </head>
 <body>
 
+    <video id="webcam-feed" autoplay playsinline muted></video>
     <div id="canvas-container"></div>
 
     <div id="ui-layer">
-        <div class="instruction-card shadow-lg shadow-cyan-500/10">
-            <h1 class="text-xl font-bold text-cyan-400 mb-2 tracking-wider">STAR CORE 💠</h1>
-            <div id="loading-msg" class="text-sm text-gray-400 mb-2">
-                <span class="status-dot status-loading" id="status-dot"></span>
-                <span id="status-text">Đang khởi tạo AI...</span>
+        <div class="bg-black/80 p-5 rounded-xl border border-cyan-500/30 backdrop-blur-md w-72">
+            <h1 class="text-cyan-400 font-bold text-lg mb-2">HỆ THỐNG STAR CORE</h1>
+            <div class="flex items-center gap-2 text-sm mb-4">
+                <span id="status-dot" class="status-dot loading"></span>
+                <span id="status-text">Đang kết nối Camera...</span>
             </div>
-            
-            <div class="space-y-2 text-sm text-cyan-100 mt-4 border-t border-cyan-900 pt-3">
-                <div class="flex items-center">
-                    <span class="gesture-icon">☝️</span>
-                    <span><strong>Chỉ trỏ:</strong> Nổ tung hạt (Explode)</span>
-                </div>
-                <div class="flex items-center">
-                    <span class="gesture-icon">✊</span>
-                    <span><strong>Nắm tay:</strong> Xoay & Thu hồi hạt</span>
-                </div>
-                <div class="flex items-center">
-                    <span class="gesture-icon">✌️</span>
-                    <span><strong>2 Ngón:</strong> Thu phóng (Zoom)</span>
-                </div>
-            </div>
-
-            <div class="mt-4">
-                <p class="text-xs text-cyan-600 font-mono">DEBUG:</p>
-                <p id="debug-text" class="text-xs text-gray-500 font-mono">Đang quét tay...</p>
-            </div>
+            <div id="debug-msg" class="text-[10px] font-mono text-gray-400 break-words"></div>
         </div>
     </div>
 
-    <video id="webcam-feed" autoplay playsinline muted></video>
-
     <script>
-        // --- CẤU HÌNH THREE.JS ---
-        const container = document.getElementById('canvas-container');
-        const debugText = document.getElementById('debug-text');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+        const debugMsg = document.getElementById('debug-msg');
+
+        function logError(msg) {
+            statusText.innerText = "LỖI HỆ THỐNG";
+            statusDot.className = "status-dot error";
+            debugMsg.innerHTML += `> ${msg}<br>`;
+            console.error(msg);
+        }
+
+        // 1. Khởi tạo Three.js
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 8;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        container.appendChild(renderer.domElement);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        const universeGroup = new THREE.Group();
-        scene.add(universeGroup);
+        // Tạo vật thể mẫu (Để đảm bảo màn hình không đen kể cả khi chưa có AI)
+        const starGeo = new THREE.SphereGeometry(2, 32, 32);
+        const starMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true });
+        const star = new THREE.Mesh(starGeo, starMat);
+        scene.add(star);
+        camera.position.z = 5;
 
-        const centralSystem = new THREE.Group();
-        universeGroup.add(centralSystem);
-
-        // --- TẠO TEXTURE HẠT ---
-        const getSharpTexture = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-            gradient.addColorStop(0, 'rgba(255,255,255,1)');
-            gradient.addColorStop(0.3, 'rgba(255,255,255,0.4)');
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 64, 64);
-            const tex = new THREE.Texture(canvas);
-            tex.needsUpdate = true;
-            return tex;
-        };
-        const sharpTexture = getSharpTexture();
-
-        // --- 1. HẠT BỀ MẶT (CÓ KHẢ NĂNG NỔ) ---
-        const surfaceParticleCount = 8000;
-        const surfGeo = new THREE.BufferGeometry();
-        const surfPos = new Float32Array(surfaceParticleCount * 3);
-        const originalPositions = new Float32Array(surfaceParticleCount * 3);
-        const surfCols = new Float32Array(surfaceParticleCount * 3);
-
-        for (let i = 0; i < surfaceParticleCount; i++) {
-            const r = 1.9 + Math.random() * 0.4; 
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos((Math.random() * 2) - 1);
-
-            const x = r * Math.sin(phi) * Math.cos(theta);
-            const y = r * Math.sin(phi) * Math.sin(theta);
-            const z = r * Math.cos(phi);
-
-            surfPos[i * 3] = x; surfPos[i * 3 + 1] = y; surfPos[i * 3 + 2] = z;
-            originalPositions[i * 3] = x; originalPositions[i * 3 + 1] = y; originalPositions[i * 3 + 2] = z;
-
-            const col = new THREE.Color().setHSL(0.1 + Math.random() * 0.1, 1.0, 0.5);
-            surfCols[i * 3] = col.r; surfCols[i * 3 + 1] = col.g; surfCols[i * 3 + 2] = col.b;
-        }
-
-        surfGeo.setAttribute('position', new THREE.BufferAttribute(surfPos, 3));
-        surfGeo.setAttribute('color', new THREE.BufferAttribute(surfCols, 3));
-        
-        const planetSurface = new THREE.Points(surfGeo, new THREE.PointsMaterial({ 
-            size: 0.07, vertexColors: true, map: sharpTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false 
-        }));
-        centralSystem.add(planetSurface);
-
-        // --- 2. LÕI ---
-        const blueCore = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x00ffff, blending: THREE.AdditiveBlending }));
-        blueCore.scale.set(3, 3, 3);
-        centralSystem.add(blueCore);
-
-        // --- 3. VÒNG NHẪN ---
-        const createRing = (innerR, outerR, count, color) => {
-            const geo = new THREE.BufferGeometry();
-            const pos = new Float32Array(count * 3);
-            for(let i=0; i<count; i++) {
-                const r = innerR + Math.random() * (outerR - innerR);
-                const theta = Math.random() * Math.PI * 2;
-                pos[i*3] = r * Math.cos(theta);
-                pos[i*3+1] = (Math.random()-0.5)*0.1;
-                pos[i*3+2] = r * Math.sin(theta);
-            }
-            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-            return new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.05, color: color, map: sharpTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5 }));
-        };
-        centralSystem.add(createRing(3.5, 5.5, 8000, 0xffaa00));
-
-        // --- LOGIC ĐIỀU KHIỂN ---
-        let state = {
-            targetQuaternion: new THREE.Quaternion(),
-            targetZoom: 8,
-            explodeFactor: 0,
-            targetExplode: 0,
-            prevHandX: 0, prevHandY: 0
-        };
-
-        function onResults(results) {
-            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                state.targetExplode = 0; 
-                return;
-            }
-            const lm = results.multiHandLandmarks[0];
-            const hX = 1 - lm[9].x; const hY = lm[9].y;
-
-            const isFolded = (tip, pip) => Math.hypot(lm[tip].x-lm[0].x, lm[tip].y-lm[0].y) < Math.hypot(lm[pip].x-lm[0].x, lm[pip].y-lm[0].y);
-            const indexF = isFolded(8,6);
-            const middleF = isFolded(12,10);
-            const ringF = isFolded(16,14);
-            const pinkyF = isFolded(20,18);
-
-            if (!indexF && middleF && ringF && pinkyF) {
-                state.targetExplode = 1; // Nổ
-                debugText.innerText = "☝️ EXPLODING";
-            } else if (indexF && middleF && ringF && pinkyF) {
-                state.targetExplode = 0; // Nắm tay xoay
-                const dX = hX - state.prevHandX;
-                const dY = hY - state.prevHandY;
-                const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dX * 5);
-                const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dY * 5);
-                state.targetQuaternion.premultiply(qY).premultiply(qX);
-            } else {
-                state.targetExplode = 0;
-            }
-            state.prevHandX = hX; state.prevHandY = hY;
-        }
-
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        hands.onResults(onResults);
-
-        new Camera(document.getElementById('webcam-feed'), {
-            onFrame: async () => await hands.send({image: document.getElementById('webcam-feed')}),
-            width: 320, height: 240
-        }).start().then(() => {
-            document.getElementById('status-text').innerText = "Hệ thống Online";
-            document.getElementById('status-dot').className = "status-dot status-active";
+        // 2. Khởi tạo MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
-        // --- VÒNG LẶP ANIMATION ---
-        let time = 0;
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks.length > 0) {
+                statusText.innerText = "Đã nhận diện tay";
+                star.rotation.y += 0.05; // Xoay thử nghiệm
+            }
+        });
+
+        // 3. Khởi tạo Camera với bắt lỗi
+        const videoElement = document.getElementById('webcam-feed');
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640, height: 480
+        });
+
+        cameraUtils.start()
+            .then(() => {
+                statusText.innerText = "Hệ thống Online";
+                statusDot.className = "status-dot active";
+                debugMsg.innerText = "Camera OK. AI OK.";
+            })
+            .catch(err => {
+                logError("Không thể mở Camera. Hãy cấp quyền hoặc dùng HTTPS/Localhost.");
+            });
+
         function animate() {
             requestAnimationFrame(animate);
-            time += 0.02;
-
-            // 1. Cập nhật Explode Factor
-            state.explodeFactor += (state.targetExplode - state.explodeFactor) * 0.08;
-            
-            // 2. Di chuyển các hạt bề mặt
-            const posAttr = planetSurface.geometry.attributes.position;
-            for (let i = 0; i < surfaceParticleCount; i++) {
-                const i3 = i * 3;
-                const ox = originalPositions[i3];
-                const oy = originalPositions[i3+1];
-                const oz = originalPositions[i3+2];
-
-                // Vị trí đích khi nổ (bay xa gấp 4 lần kèm chút nhiễu sóng)
-                const tx = ox * 4 + Math.sin(time + i) * 0.3;
-                const ty = oy * 4 + Math.cos(time + i) * 0.3;
-                const tz = oz * 4;
-
-                // Nội suy từ gốc đến đích
-                posAttr.array[i3] = ox + (tx - ox) * state.explodeFactor;
-                posAttr.array[i3+1] = oy + (ty - oy) * state.explodeFactor;
-                posAttr.array[i3+2] = oz + (tz - oz) * state.explodeFactor;
-            }
-            posAttr.needsUpdate = true;
-
-            // 3. Xoay và Hiệu ứng lõi
-            universeGroup.quaternion.slerp(state.targetQuaternion, 0.1);
-            blueCore.scale.set(2 + Math.sin(time*3)*0.5, 2 + Math.sin(time*3)*0.5, 1);
-            
+            star.rotation.x += 0.005;
             renderer.render(scene, camera);
         }
-
         animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
