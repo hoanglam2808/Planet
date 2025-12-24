@@ -1,222 +1,291 @@
-/* --- SAO CHÉP VÀ THAY THẾ TOÀN BỘ PHẦN <script> TRONG FILE CỦA BẠN --- */
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golden Universe - Explode Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-// --- UI Logic ---
-const toggleBtn = document.getElementById('toggle-ui-btn');
-const uiLayer = document.getElementById('ui-layer');
-toggleBtn.addEventListener('click', () => uiLayer.classList.toggle('hidden-ui'));
-
-// --- 1. THREE.JS SETUP ---
-const container = document.getElementById('canvas-container');
-const debugText = document.getElementById('debug-text');
-
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000000, 0.02);
-
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 8;
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
-container.appendChild(renderer.domElement);
-
-const universeGroup = new THREE.Group();
-scene.add(universeGroup);
-
-const centralSystem = new THREE.Group();
-universeGroup.add(centralSystem);
-
-// --- TEXTURE GENERATION ---
-const getSharpTexture = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64; canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gradient.addColorStop(0, 'rgba(255,255,255,1)');
-    gradient.addColorStop(0.3, 'rgba(255,255,255,0.4)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 64, 64);
-    const tex = new THREE.Texture(canvas);
-    tex.needsUpdate = true;
-    return tex;
-};
-const sharpTexture = getSharpTexture();
-
-// --- STATE MANAGEMENT ---
-let state = {
-    isHandDetected: false,
-    targetQuaternion: new THREE.Quaternion(),
-    targetZoom: 8,
-    explodeFactor: 0,   // 0 = Bình thường, 1 = Nổ tung
-    targetExplode: 0,
-    handX: 0, handY: 0,
-    prevHandX: 0, prevHandY: 0,
-    prevHandAngle: 0
-};
-
-// --- 1. THE PLANET SURFACE (Có khả năng nổ) ---
-const surfaceParticleCount = 8000;
-const surfGeo = new THREE.BufferGeometry();
-const surfPos = new Float32Array(surfaceParticleCount * 3);
-const surfOrigPos = new Float32Array(surfaceParticleCount * 3); // Lưu vị trí gốc
-const surfCols = new Float32Array(surfaceParticleCount * 3);
-
-for (let i = 0; i < surfaceParticleCount; i++) {
-    const r = 1.9 + Math.random() * 0.4; 
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos((Math.random() * 2) - 1);
-
-    const x = r * Math.sin(phi) * Math.cos(theta);
-    const y = r * Math.sin(phi) * Math.sin(theta);
-    const z = r * Math.cos(phi);
-
-    surfPos[i*3] = x; surfPos[i*3+1] = y; surfPos[i*3+2] = z;
-    surfOrigPos[i*3] = x; surfOrigPos[i*3+1] = y; surfOrigPos[i*3+2] = z;
-
-    const col = new THREE.Color(0xffcc00).lerp(new THREE.Color(0xff5500), Math.random());
-    surfCols[i*3] = col.r; surfCols[i*3+1] = col.g; surfCols[i*3+2] = col.b;
-}
-surfGeo.setAttribute('position', new THREE.BufferAttribute(surfPos, 3));
-surfGeo.setAttribute('color', new THREE.BufferAttribute(surfCols, 3));
-const planetSurface = new THREE.Points(surfGeo, new THREE.PointsMaterial({ size: 0.08, vertexColors: true, map: sharpTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false }));
-centralSystem.add(planetSurface);
-
-// --- 2. PULSING CORE ---
-const getBlueGlow = () => {
-    const c = document.createElement('canvas'); c.width=64; c.height=64;
-    const x = c.getContext('2d');
-    const g = x.createRadialGradient(32,32,0,32,32,32);
-    g.addColorStop(0, 'rgba(200, 255, 255, 1)');
-    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    x.fillStyle = g; x.fillRect(0,0,64,64);
-    const t = new THREE.Texture(c); t.needsUpdate=true; return t;
-};
-const blueCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: getBlueGlow(), color: 0x00ffff, blending: THREE.AdditiveBlending }));
-blueCore.scale.set(3, 3, 3);
-centralSystem.add(blueCore);
-
-// --- 3. RINGS (Có khả năng nổ) ---
-const createRing = (innerR, outerR, count, colorHex) => {
-    const geo = new THREE.BufferGeometry();
-    const pos = new Float32Array(count * 3);
-    const origPos = new Float32Array(count * 3);
-    for(let i=0; i<count; i++) {
-        const r = innerR + Math.random() * (outerR - innerR);
-        const theta = Math.random() * Math.PI * 2;
-        pos[i*3] = r * Math.cos(theta);
-        pos[i*3+1] = (Math.random()-0.5)*0.1;
-        pos[i*3+2] = r * Math.sin(theta);
-        origPos[i*3] = pos[i*3]; origPos[i*3+1] = pos[i*3+1]; origPos[i*3+2] = pos[i*3+2];
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const points = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.05, color: colorHex, map: sharpTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.6 }));
-    points.userData.origPos = origPos; // Lưu trữ để nổ
-    return points;
-};
-const mainRing = createRing(3.2, 6.0, 10000, 0xffaa00);
-centralSystem.add(mainRing);
-
-// --- GESTURE LOGIC ---
-function onResults(results) {
-    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-        state.isHandDetected = false;
-        state.targetExplode = 0; // Tự động thu hồi khi mất tay
-        return;
-    }
-    state.isHandDetected = true;
-    const lm = results.multiHandLandmarks[0];
-    state.handX = 1 - lm[9].x; state.handY = lm[9].y;
-
-    const isFolded = (tip, pip) => Math.hypot(lm[tip].x-lm[0].x, lm[tip].y-lm[0].y) < Math.hypot(lm[pip].x-lm[0].x, lm[pip].y-lm[0].y);
-    const indexF = isFolded(8,6);
-    const middleF = isFolded(12,10);
-    const ringF = isFolded(16,14);
-    const pinkyF = isFolded(20,18);
-
-    // CỬ CHỈ MỚI: CHỈ NGÓN TRỎ = NỔ TUNG
-    const isPointing = !indexF && middleF && ringF && pinkyF;
-    const isFist = indexF && middleF && ringF && pinkyF;
-    const isTwoFingers = !indexF && !middleF && ringF && pinkyF;
-
-    if (isPointing) {
-        state.targetExplode = 1;
-        debugText.innerText = "☝️ EXPLODING PARTICLES";
-    } else if (isFist) {
-        state.targetExplode = 0;
-        debugText.innerText = "✊ ROTATING";
-        const dX = state.handX - state.prevHandX;
-        const dY = state.handY - state.prevHandY;
-        const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dX * 6);
-        const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dY * 6);
-        state.targetQuaternion.premultiply(qY).premultiply(qX);
-    } else if (isTwoFingers) {
-        state.targetExplode = 0;
-        const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-        state.targetZoom = 15 - (dist * 25);
-    } else {
-        state.targetExplode = 0;
-        debugText.innerText = "🖐 READY (Open Hand)";
-    }
-
-    state.prevHandX = state.handX; state.prevHandY = state.handY;
-    const dx = lm[9].x - lm[0].x; const dy = lm[9].y - lm[0].y;
-    state.prevHandAngle = Math.atan2(dy, dx);
-}
-
-// --- ANIMATION LOOP (Phần quan trọng nhất) ---
-let time = 0;
-function animate() {
-    requestAnimationFrame(animate);
-    time += 0.015;
-
-    // 1. Nội suy Explode Factor (mượt mà)
-    state.explodeFactor += (state.targetExplode - state.explodeFactor) * 0.08;
-
-    // 2. Cập nhật vị trí hạt Planet Surface
-    const surfAttr = planetSurface.geometry.attributes.position;
-    for (let i = 0; i < surfaceParticleCount; i++) {
-        const i3 = i * 3;
-        // Hướng nổ = Vector từ tâm đến vị trí gốc
-        const ox = surfOrigPos[i3], oy = surfOrigPos[i3+1], oz = surfOrigPos[i3+2];
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #webcam-feed { position: absolute; bottom: 20px; left: 20px; width: 180px; height: 135px; border-radius: 12px; border: 2px solid #00ffff; z-index: 10; transform: scaleX(-1); object-fit: cover; opacity: 0.7; box-shadow: 0 0 15px rgba(0, 255, 255, 0.5); }
         
-        // Vị trí nổ = Vị trí gốc * hệ số nổ
-        surfAttr.array[i3] = ox + ox * state.explodeFactor * 3;
-        surfAttr.array[i3+1] = oy + oy * state.explodeFactor * 3;
-        surfAttr.array[i3+2] = oz + oz * state.explodeFactor * 3;
-    }
-    surfAttr.needsUpdate = true;
+        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 20; pointer-events: none; }
+        .glass-card { background: rgba(0, 10, 20, 0.8); backdrop-filter: blur(10px); padding: 20px; border-radius: 15px; border: 1px solid rgba(0, 255, 255, 0.2); width: 300px; pointer-events: auto; }
+        
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .active { background: #00ffff; box-shadow: 0 0 10px #00ffff; }
+        .loading { background: #ffa500; animation: pulse 1s infinite; }
+        
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        
+        .gesture-guide { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.85rem; color: #a5f3fc; }
+    </style>
+</head>
+<body>
 
-    // 3. Cập nhật vị trí hạt Ring
-    const ringAttr = mainRing.geometry.attributes.position;
-    const ringOrig = mainRing.userData.origPos;
-    for (let i = 0; i < ringAttr.count; i++) {
-        const i3 = i * 3;
-        const ox = ringOrig[i3], oy = ringOrig[i3+1], oz = ringOrig[i3+2];
-        ringAttr.array[i3] = ox + ox * state.explodeFactor * 2;
-        ringAttr.array[i3+1] = oy + (Math.sin(time + i) * state.explodeFactor * 2); // Thêm chút nhiễu sóng khi nổ
-        ringAttr.array[i3+2] = oz + oz * state.explodeFactor * 2;
-    }
-    ringAttr.needsUpdate = true;
+    <div id="canvas-container"></div>
+    <video id="webcam-feed" autoplay playsinline muted></video>
 
-    // 4. Camera & Core Animation
-    camera.position.z += (state.targetZoom - camera.position.z) * 0.05;
-    universeGroup.quaternion.slerp(state.targetQuaternion, 0.1);
-    
-    const pulse = 1 + Math.sin(time * 3) * 0.1;
-    blueCore.scale.set(3 * pulse, 3 * pulse, 3 * pulse);
-    
-    // Xoay nhẹ tự nhiên
-    planetSurface.rotation.y -= 0.002;
-    mainRing.rotation.y -= 0.004;
+    <div id="ui-layer">
+        <div class="glass-card shadow-2xl">
+            <h1 class="text-2xl font-black text-cyan-400 tracking-tighter mb-1">STAR CORE AI</h1>
+            <div class="flex items-center mb-4">
+                <span id="status-dot" class="status-dot loading"></span>
+                <span id="status-text" class="text-xs font-mono text-gray-400">Đang khởi tạo AI...</span>
+            </div>
 
-    renderer.render(scene, camera);
-}
+            <div class="space-y-3 border-t border-cyan-900/50 pt-4">
+                <div class="gesture-guide"><span>☝️</span> <b>Chỉ tay:</b> Nổ tung hạt (Explode)</div>
+                <div class="gesture-guide"><span>✊</span> <b>Nắm tay:</b> Xoay vũ trụ</div>
+                <div class="gesture-guide"><span>✌️</span> <b>Hai ngón:</b> Phóng to/Thu nhỏ</div>
+                <div class="gesture-guide"><span>🖐</span> <b>Mở tay:</b> Chế độ chờ</div>
+            </div>
 
-// Khởi tạo MediaPipe & Camera
-const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-hands.onResults(onResults);
-new Camera(videoElement, { onFrame: async () => await hands.send({image: videoElement}), width: 320, height: 240 }).start();
+            <div class="mt-4 pt-3 border-t border-cyan-900/50">
+                <p class="text-[10px] text-cyan-700 font-bold uppercase tracking-widest">Hệ thống phản hồi:</p>
+                <p id="debug-text" class="text-xs text-gray-500 font-mono mt-1">Đang quét không gian...</p>
+            </div>
+        </div>
+    </div>
 
-animate();
+    <script>
+        // ==========================================
+        // 1. KHỞI TẠO CẤU HÌNH THREE.JS
+        // ==========================================
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 8;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const universeGroup = new THREE.Group();
+        scene.add(universeGroup);
+
+        const centralSystem = new THREE.Group();
+        universeGroup.add(centralSystem);
+
+        // Tạo Texture hạt sắc nét
+        const createSharpTexture = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'white');
+            grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, 64, 64);
+            const tex = new THREE.Texture(canvas); tex.needsUpdate = true;
+            return tex;
+        };
+        const particleTexture = createSharpTexture();
+
+        // ==========================================
+        // 2. TẠO CÁC ĐỐI TƯỢNG (Hành tinh, Vòng nhẫn, Sao)
+        // ==========================================
+        
+        // --- Bề mặt hành tinh (8000 hạt) ---
+        const surfCount = 8000;
+        const surfGeo = new THREE.BufferGeometry();
+        const surfPositions = new Float32Array(surfCount * 3);
+        const surfOriginals = new Float32Array(surfCount * 3); // Lưu vị trí gốc để thu hồi sau khi nổ
+        const surfColors = new Float32Array(surfCount * 3);
+
+        for(let i=0; i<surfCount; i++) {
+            const r = 1.8 + Math.random() * 0.5;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+            
+            surfPositions[i*3] = x; surfPositions[i*3+1] = y; surfPositions[i*3+2] = z;
+            surfOriginals[i*3] = x; surfOriginals[i*3+1] = y; surfOriginals[i*3+2] = z;
+
+            const color = new THREE.Color().setHSL(0.1 + Math.random()*0.1, 1, 0.5); // Màu vàng cam
+            surfColors[i*3] = color.r; surfColors[i*3+1] = color.g; surfColors[i*3+2] = color.b;
+        }
+        surfGeo.setAttribute('position', new THREE.BufferAttribute(surfPositions, 3));
+        surfGeo.setAttribute('color', new THREE.BufferAttribute(surfColors, 3));
+        const planetSurface = new THREE.Points(surfGeo, new THREE.PointsMaterial({ size: 0.07, vertexColors: true, map: particleTexture, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+        centralSystem.add(planetSurface);
+
+        // --- Lõi năng lượng xanh ---
+        const coreCanvas = document.createElement('canvas'); coreCanvas.width=64; coreCanvas.height=64;
+        const coreCtx = coreCanvas.getContext('2d');
+        const coreGrad = coreCtx.createRadialGradient(32,32,0,32,32,32);
+        coreGrad.addColorStop(0, '#fff'); coreGrad.addColorStop(0.3, '#0ff'); coreGrad.addColorStop(1, 'transparent');
+        coreCtx.fillStyle = coreGrad; coreCtx.fillRect(0,0,64,64);
+        const coreTex = new THREE.Texture(coreCanvas); coreTex.needsUpdate = true;
+        const blueCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: coreTex, blending: THREE.AdditiveBlending }));
+        blueCore.scale.set(3,3,3);
+        centralSystem.add(blueCore);
+
+        // --- Hàm tạo Vòng nhẫn ---
+        function createRing(inner, outer, count, colorHex) {
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+            const orig = new Float32Array(count * 3);
+            for(let i=0; i<count; i++) {
+                const r = inner + Math.random() * (outer - inner);
+                const a = Math.random() * Math.PI * 2;
+                pos[i*3] = Math.cos(a) * r; pos[i*3+1] = (Math.random()-0.5)*0.1; pos[i*3+2] = Math.sin(a) * r;
+                orig[i*3] = pos[i*3]; orig[i*3+1] = pos[i*3+1]; orig[i*3+2] = pos[i*3+2];
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const p = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.05, color: colorHex, map: particleTexture, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending }));
+            p.userData.originalPositions = orig;
+            return p;
+        }
+        const ring1 = createRing(3.2, 5.5, 10000, 0xffaa00);
+        const ring2 = createRing(6.0, 6.8, 5000, 0x00ffff);
+        centralSystem.add(ring1); centralSystem.add(ring2);
+
+        // ==========================================
+        // 3. LOGIC XỬ LÝ TAY (MEDIAPIPE)
+        // ==========================================
+        let state = {
+            detected: false,
+            explode: 0, targetExplode: 0, // 0: Bình thường, 1: Nổ tung
+            zoom: 8, targetZoom: 8,
+            rotation: new THREE.Quaternion(),
+            handX: 0, handY: 0, prevHandX: 0, prevHandY: 0
+        };
+
+        const debugText = document.getElementById('debug-text');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+
+        function onResults(results) {
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                state.detected = false;
+                state.targetExplode = 0; // Tự động thu hồi hạt khi mất dấu tay
+                return;
+            }
+            state.detected = true;
+            const lm = results.multiHandLandmarks[0];
+            
+            // Lấy tọa độ tâm bàn tay
+            state.handX = 1 - lm[9].x; state.handY = lm[9].y;
+
+            // Kiểm tra các ngón tay gập/mở
+            const isFolded = (tip, pip) => Math.hypot(lm[tip].x-lm[0].x, lm[tip].y-lm[0].y) < Math.hypot(lm[pip].x-lm[0].x, lm[pip].y-lm[0].y);
+            const indexF = isFolded(8,6), middleF = isFolded(12,10), ringF = isFolded(16,14), pinkyF = isFolded(20,18);
+
+            // PHÂN LOẠI CỬ CHỈ
+            if (!indexF && middleF && ringF && pinkyF) {
+                // 1. Chỉ tay (☝️) -> NỔ TUNG
+                state.targetExplode = 1;
+                debugText.innerText = "KÍCH HOẠT: NỔ TUNG HẠT";
+            } 
+            else if (indexF && middleF && ringF && pinkyF) {
+                // 2. Nắm tay (✊) -> XOAY
+                state.targetExplode = 0;
+                const dX = (state.handX - state.prevHandX) * 7;
+                const dY = (state.handY - state.prevHandY) * 7;
+                const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), dY);
+                const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), dX);
+                state.rotation.premultiply(qY).premultiply(qX);
+                debugText.innerText = "ĐANG XOAY HỆ THỐNG";
+            }
+            else if (!indexF && !middleF && ringF && pinkyF) {
+                // 3. Hai ngón (✌️) -> ZOOM
+                state.targetExplode = 0;
+                const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                state.targetZoom = 15 - (dist * 25);
+                debugText.innerText = "ĐANG ĐIỀU CHỈNH KHOẢNG CÁCH";
+            }
+            else {
+                state.targetExplode = 0;
+                debugText.innerText = "ĐANG CHỜ CỬ CHỈ...";
+            }
+
+            state.prevHandX = state.handX; state.prevHandY = state.handY;
+        }
+
+        // Cài đặt MediaPipe
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+        hands.onResults(onResults);
+
+        const videoElement = document.getElementById('webcam-feed');
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 480, height: 360
+        });
+        cameraUtils.start().then(() => {
+            statusText.innerText = "Hệ thống ONLINE";
+            statusDot.className = "status-dot active";
+        });
+
+        // ==========================================
+        // 4. VÒNG LẶP ANIMATION (XỬ LÝ NỔ & DI CHUYỂN)
+        // ==========================================
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+
+            // Mượt hóa biến nổ và zoom
+            state.explode += (state.targetExplode - state.explode) * 0.1;
+            camera.position.z += (state.targetZoom - camera.position.z) * 0.1;
+
+            // Xoay nhẹ tự nhiên
+            universeGroup.quaternion.slerp(state.rotation, 0.1);
+
+            // HIỆU ỨNG NỔ: Cập nhật vị trí từng hạt
+            // 1. Planet Surface
+            const surfPosAttr = planetSurface.geometry.attributes.position;
+            for(let i=0; i<surfCount; i++) {
+                const i3 = i * 3;
+                const ox = surfOriginals[i3], oy = surfOriginals[i3+1], oz = surfOriginals[i3+2];
+                // Hạt bay ra xa tâm theo tỉ lệ nổ
+                surfPosAttr.array[i3] = ox + ox * state.explode * 4;
+                surfPosAttr.array[i3+1] = oy + oy * state.explode * 4;
+                surfPosAttr.array[i3+2] = oz + oz * state.explode * 4;
+            }
+            surfPosAttr.needsUpdate = true;
+
+            // 2. Rings
+            [ring1, ring2].forEach(r => {
+                const attr = r.geometry.attributes.position;
+                const orig = r.userData.originalPositions;
+                for(let i=0; i<attr.count; i++) {
+                    const i3 = i * 3;
+                    attr.array[i3] = orig[i3] + orig[i3] * state.explode * 2;
+                    attr.array[i3+1] = orig[i3+1] + (Math.sin(time*2 + i)*0.5 * state.explode); // Thêm độ rung khi nổ
+                    attr.array[i3+2] = orig[i3+2] + orig[i3+2] * state.explode * 2;
+                }
+                attr.needsUpdate = true;
+                r.rotation.y -= 0.005;
+            });
+
+            // Hiệu ứng lõi xanh đập (Pulse)
+            const p = 1 + Math.sin(time * 4) * 0.1;
+            blueCore.scale.set(3*p, 3*p, 3*p);
+            blueCore.material.opacity = 0.5 + Math.sin(time*4)*0.5;
+
+            planetSurface.rotation.y += 0.002;
+            renderer.render(scene, camera);
+        }
+
+        // Xử lý co giãn màn hình
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
